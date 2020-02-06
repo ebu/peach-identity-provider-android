@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="identity_web_url" translatable="false" />
+    <string name="identity_webservice_url" translatable="false" />
+    <string name="account_type" translatable="false" />
+    <string name="identity_name" translatable="false" />
+    <string name="identity_application_scheme_url" translatable="false" />
+    <bool name="identity_web_content_debugging">false</bool>
+</resources>
