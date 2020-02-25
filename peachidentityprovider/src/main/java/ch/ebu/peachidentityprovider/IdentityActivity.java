@@ -13,8 +13,6 @@ import androidx.core.app.ActivityCompat;
 import android.text.TextUtils;
 import android.util.Log;
 
-import org.json.JSONObject;
-
 import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -26,6 +24,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 import static ch.ebu.peachidentityprovider.Constant.*;
+import static ch.ebu.peachidentityprovider.IdentityProvider.parseProfile;
 import static java.net.HttpURLConnection.*;
 
 
@@ -129,15 +128,8 @@ public class IdentityActivity extends AccountAuthenticatorActivity {
                         response.append(line);
                     }
 
-                    String login = null;
-                    try {
-                        JSONObject obj = new JSONObject(response.toString());
-                        Profile profile = new Profile(obj.getJSONObject("user"));
-                        login = profile.login;
-
-                    } catch (Throwable t) {
-                        Log.e("Profile Request", "Could not parse malformed JSON: \"" + result + "\"");
-                    }
+                    Profile profile = parseProfile(response.toString());
+                    String login = (profile != null) ? profile.login : null;
 
                     if (!TextUtils.isEmpty(login)){
 
@@ -169,14 +161,9 @@ public class IdentityActivity extends AccountAuthenticatorActivity {
             } catch (IOException e) {
                 result = RESULT_PROFILE_ERROR;
             } finally {
-                urlConnection.disconnect();
+                if (urlConnection != null) urlConnection.disconnect();
                 final int resultFinal = result;
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        sendResult(resultFinal);
-                    }
-                });
+                runOnUiThread(() -> sendResult(resultFinal));
             }
         });
 

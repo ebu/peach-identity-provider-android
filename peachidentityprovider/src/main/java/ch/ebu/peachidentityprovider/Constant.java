@@ -14,11 +14,19 @@ public class Constant {
 
     public static final String WEBSERVICE_VERSION = "v2";
     public static final String PROFILE_URL = WEBSERVICE_VERSION + "/session/user/profile";
+    public static final String SIGNUP_URL = WEBSERVICE_VERSION + "/session/signup";
+    public static final String LOGIN_URL = WEBSERVICE_VERSION + "/session/login";
     public static final String LOGOUT_URL = WEBSERVICE_VERSION + "/session/logout";
 
     public static final String ARG_CALLBACK_RESULT = "ch.ebu.peach.identity.provider.result";
 
     public static final String PEACH_PROFILE_UPDATED = "ch.ebu.peach.identity.provider.profile.updated";
+
+    public static final String PEACH_ERROR = "ch.ebu.peach.identity.provider.error";
+    public static final String PEACH_ERROR_DESCRIPTION = "ch.ebu.peach.identity.provider.error.description";
+    public static final String PEACH_ERROR_UNKNOWN = "UNKNOWN";
+    public static final String PEACH_ERROR_BAD_DATA = "BAD_DATA";
+    public static final String PEACH_ERROR_INCORRECT_LOGIN_OR_PASSWORD = "INCORRECT_LOGIN_OR_PASSWORD";
 
     /**
      * Log in attempt failed
