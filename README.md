@@ -97,3 +97,22 @@ To logout the current user:
 ```java
 IdentityProvider.getInstance().logOut()
 ```
+
+## 9. Advanced API calls
+
+The framework provides methods to login and signup without using a WebView (using the webview is still the recommended process).
+When using those functions, on a successful login or sign up, the framework automatically starts the retrieval of the profile. Then, when the profile is retrieved, it will broadcast the usual intent (`PEACH_PROFILE_UPDATED`).
+When an error occurs during the login or the sign up, the same intent is broadcasted but will have extras.
+In case of a sign up error, the `PEACH_ERROR` extra value will be `PEACH_ERROR_BAD_DATA` and a `PEACH_ERROR_DESCRIPTION` extra will be available (a JSON describing the error). For a login error, the `PEACH_ERROR` extra value will be `PEACH_ERROR_INCORRECT_LOGIN_OR_PASSWORD`.
+
+### Signup
+
+```java
+IdentityProvider.getInstance().signup("randomuser@ebu.ch", "str0NgP@ssW0rd");
+```
+
+### Login
+
+```java
+IdentityProvider.getInstance().login("randomuser@ebu.ch", "str0NgP@ssW0rd");
+```

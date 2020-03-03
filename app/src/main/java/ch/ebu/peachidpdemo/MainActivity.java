@@ -20,6 +20,10 @@ import android.widget.Toast;
 import ch.ebu.peachidentityprovider.IdentityProvider;
 import ch.ebu.peachidentityprovider.Profile;
 
+import static ch.ebu.peachidentityprovider.Constant.PEACH_ERROR;
+import static ch.ebu.peachidentityprovider.Constant.PEACH_ERROR_BAD_DATA;
+import static ch.ebu.peachidentityprovider.Constant.PEACH_ERROR_DESCRIPTION;
+import static ch.ebu.peachidentityprovider.Constant.PEACH_ERROR_INCORRECT_LOGIN_OR_PASSWORD;
 import static ch.ebu.peachidentityprovider.Constant.PEACH_PROFILE_UPDATED;
 
 public class MainActivity extends AppCompatActivity {
@@ -38,6 +42,15 @@ public class MainActivity extends AppCompatActivity {
         public void onReceive(Context context, Intent intent) {
             updateProfileDisplay();
 
+            // for login or sign up, check for errors
+            if(intent.hasExtra(PEACH_ERROR)) {
+                if (intent.getStringExtra(PEACH_ERROR).equalsIgnoreCase(PEACH_ERROR_BAD_DATA)) {
+                    Log.e("ERROR", intent.getStringExtra(PEACH_ERROR_DESCRIPTION));
+                }
+                else if (intent.getStringExtra(PEACH_ERROR).equalsIgnoreCase(PEACH_ERROR_INCORRECT_LOGIN_OR_PASSWORD)) {
+                    Log.e("ERROR", "Incorrect login or password");
+                }
+            }
         }
     }
 

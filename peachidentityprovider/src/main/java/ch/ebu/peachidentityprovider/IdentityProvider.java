@@ -31,8 +31,13 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import static ch.ebu.peachidentityprovider.Constant.*;
 import static java.net.HttpURLConnection.*;
@@ -40,7 +45,7 @@ import static java.net.HttpURLConnection.*;
 public class IdentityProvider {
 
     private static final String TAG = "IdentityProvider";
-    public static IdentityProvider instance;
+    private static IdentityProvider instance;
 
     private PendingIntent callbackIntent;
 
@@ -49,14 +54,14 @@ public class IdentityProvider {
     private Context mContext;
 
     // developer defined properties
-    protected String serviceURL;
+    String serviceURL;
     private String webURL;
     private String urlScheme;
     private String accountID;
 
 
     private IdentityProvider(Context context) {
-        mContext = context;
+        this.mContext = context;
         checkNoDefaultValues(context);
         this.accountManager = AccountManager.get(context);
         this.serviceURL = context.getString(R.string.identity_webservice_url);
@@ -167,15 +172,16 @@ public class IdentityProvider {
     }
 
 
-    public class ProfileTask extends AsyncTask<String, String, String> {
+    private class ProfileTask extends AsyncTask<String, String, String> {
 
         HttpURLConnection urlConnection;
+        String token;
 
         @Override
         protected String doInBackground(String... args) {
 
             StringBuilder result = new StringBuilder();
-
+            token = args[0];
             try {
                 URL url = new URL(serviceURL + PROFILE_URL);
                 urlConnection = (HttpURLConnection)url.openConnection();
@@ -211,21 +217,165 @@ public class IdentityProvider {
             if (TextUtils.isEmpty(result)) {
                 logOut();
             }
-            try {
-                JSONObject obj = new JSONObject(result);
-                Profile profile = new Profile(obj.getJSONObject("user"));
-                storeUserId(profile.uid);
-                storeProfile(result);
 
-                Intent intent = new Intent();
-                intent.setAction(PEACH_PROFILE_UPDATED);
-                mContext.sendBroadcast(intent);
+            try {
+                saveAccount(token, result);
             } catch (Throwable t) {
                 Log.e("Profile Request", "Could not parse malformed JSON: \"" + result + "\"");
             }
+
+            Intent intent = new Intent();
+            intent.setAction(PEACH_PROFILE_UPDATED);
+            mContext.sendBroadcast(intent);
         }
 
     }
+
+
+    public void login(String email, String password) {
+        new SessionTask().execute(LOGIN_URL, email, password);
+    }
+
+    public void signup(String email, String password) {
+        new SessionTask().execute(SIGNUP_URL, email, password);
+    }
+
+    public class SessionTask extends AsyncTask<String, String, String> {
+        HttpURLConnection urlConnection;
+        Boolean isLogin = false;
+        String jsonError;
+
+        @Override
+        protected String doInBackground(String... args) {
+            StringBuilder result = new StringBuilder();
+            try {
+                isLogin = args[0].equalsIgnoreCase(LOGIN_URL);
+                urlConnection = createSessionConnection(args[0], args[1], args[2]);
+
+                int responseCode = urlConnection.getResponseCode();
+                if (responseCode >= HTTP_OK && responseCode < HTTP_MULT_CHOICE) {
+                    String token = retrieveTokenFromHeaders(urlConnection);
+                    Log.d("SESSION", token);
+                    return token;
+                }
+                else {
+                    InputStream in = new BufferedInputStream(urlConnection.getErrorStream());
+                    BufferedReader reader = new BufferedReader(new InputStreamReader(in));
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        result.append(line);
+                    }
+                    jsonError = result.toString();
+                }
+            } catch (Exception e) {
+                e.printStackTrace();
+            } finally {
+                urlConnection.disconnect();
+            }
+
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(String result) {
+            if (result != null) {
+                new ProfileTask().execute(result);
+            }
+            else {
+                Intent intent = new Intent();
+                intent.setAction(PEACH_PROFILE_UPDATED);
+                if (jsonError != null) {
+                    try {
+                        JSONObject obj = new JSONObject(jsonError);
+                        JSONObject errorObject = obj.getJSONObject("error");
+                        intent.putExtra(PEACH_ERROR, errorObject.getString("code"));
+                        intent.putExtra(PEACH_ERROR_DESCRIPTION, jsonError);
+                    } catch (Throwable t) {
+                        intent.putExtra(PEACH_ERROR, PEACH_ERROR_UNKNOWN);
+                        intent.putExtra(PEACH_ERROR_DESCRIPTION, jsonError);
+                    }
+                }
+                mContext.sendBroadcast(intent);
+            }
+        }
+    }
+
+    private HttpURLConnection createSessionConnection(String type, String email, String password) throws IOException {
+        String encodedEmail = URLEncoder.encode(email, "UTF-8");
+        String encodedPassword = URLEncoder.encode(password, "UTF-8");
+        String bodyString = "email=" + encodedEmail + "&password=" + encodedPassword;
+
+        URL url = new URL(serviceURL + type);
+        HttpURLConnection urlConnection = (HttpURLConnection)url.openConnection();
+        urlConnection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=utf-8");
+        urlConnection.setRequestMethod("POST");
+        urlConnection.connect();
+
+        byte[] outputInBytes = bodyString.getBytes("UTF-8");
+        OutputStream os = urlConnection.getOutputStream();
+        os.write( outputInBytes );
+        os.close();
+
+        return urlConnection;
+    }
+
+    @Nullable
+    private String retrieveTokenFromHeaders(HttpURLConnection urlConnection) {
+        Map<String, List<String>> headerFields = urlConnection.getHeaderFields();
+        Set<String> headerFieldsSet = headerFields.keySet();
+
+        for (String headerFieldKey : headerFieldsSet) {
+            if ("Set-Cookie".equalsIgnoreCase(headerFieldKey)) {
+                List<String> headerFieldValue = headerFields.get(headerFieldKey);
+                if (headerFieldValue == null) return null;
+                for (String headerValue : headerFieldValue) {
+                    if (headerValue.substring(0, 21).equalsIgnoreCase("identity.provider.sid")) {
+                        String token = headerValue.substring(22);
+                        if (!TextUtils.isEmpty(token)) {
+                            return token;
+                        }
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private void saveAccount(String token, String profileJson) {
+        Account account = getIdentityAccount();
+        if (account == null) {
+            final String accountType = mContext.getString(R.string.account_type);
+            final String identityName = mContext.getString(R.string.identity_name);
+            account = new Account(identityName, accountType);
+            accountManager.addAccountExplicitly(account, null, null);
+        }
+        Profile profile = parseProfile(profileJson);
+        if (profile != null){
+            accountManager.setUserData(account, KEY_LAST_KNOWN_USER_ID, profile.uid);
+            accountManager.setUserData(account, KEY_EMAIL, profile.login);
+        }
+        if (token != null) {
+            accountManager.setAuthToken(account, TOKEN_TYPE, token);
+            accountManager.setUserData(account, KEY_ACCESS_TOKEN, token);
+        }
+        accountManager.setUserData(account, KEY_PROFILE, profileJson);
+    }
+
+    @Nullable
+    static Profile parseProfile(String jsonResponse) {
+        Profile profile = null;
+        try {
+            JSONObject obj = new JSONObject(jsonResponse);
+            profile = new Profile(obj.getJSONObject("user"));
+        } catch (Throwable t) {
+            Log.e("Profile Request", "Could not parse malformed JSON: \"" + jsonResponse + "\"");
+        }
+        return profile;
+    }
+
+
+
 
     @UiThread
     public void logOut() {
